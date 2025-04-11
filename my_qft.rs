@@ -50,6 +50,75 @@ fn print_quantum_state(state: &[Complex64]) {
         }
     }
 }
+fn inverse_qft_matrix(qft: &[Vec<Complex64>]) -> Vec<Vec<Complex64>> {
+    let dim = qft.len();
+    let mut inv = vec![vec![Complex64::new(0.0, 0.0); dim]; dim];
+
+    for i in 0..dim {
+        for j in 0..dim {
+            inv[i][j] = qft[j][i].conj(); // Transpose + conjugate
+        }
+    }
+
+    inv
+}
+use plotters::prelude::*;
+
+pub fn plot_real_imag_parts(
+    state: &[Complex64],
+    filename: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let root = BitMapBackend::new(filename, (800, 400)).into_drawing_area();
+    root.fill(&WHITE)?;
+
+    let (upper, lower) = root.split_vertically(200);
+
+    let dim = state.len();
+    let max = state
+        .iter()
+        .map(|c| c.re.abs().max(c.im.abs()))
+        .fold(0.0, f64::max);
+
+    // Real part plot
+    let mut chart = ChartBuilder::on(&upper)
+        .caption("Real Part", ("sans-serif", 16))
+        .margin(5)
+        .x_label_area_size(30)
+        .y_label_area_size(30)
+        .build_cartesian_2d(0..dim, -max..max)?;
+
+    chart.configure_mesh().draw()?;
+
+    chart.draw_series(
+        state
+            .iter()
+            .enumerate()
+            .map(|(i, c)| Rectangle::new([(i, 0.0), (i + 1, c.re)], BLUE.filled())),
+    )?;
+
+    // Imaginary part plot
+    let mut chart = ChartBuilder::on(&lower)
+        .caption("Imaginary Part", ("sans-serif", 16))
+        .margin(5)
+        .x_label_area_size(30)
+        .y_label_area_size(30)
+        .build_cartesian_2d(0..dim, -max..max)?;
+
+    chart.configure_mesh().draw()?;
+
+    chart.draw_series(
+        state
+            .iter()
+            .enumerate()
+            .map(|(i, c)| Rectangle::new([(i, 0.0), (i + 1, c.im)], RED.filled())),
+    )?;
+
+    root.present()?;
+    println!("Real/Imag plot saved to {filename}");
+    Ok(())
+}
+
+
 
 fn main() {
     println!("Enter number of qubits (e.g., 2):");
@@ -73,7 +142,23 @@ fn main() {
         }
         println!();
     }
+    
 
     println!("\nInput State |{}⟩ → Output State After QFT:", input_index);
     print_quantum_state(&output_state);
+
+    println!("\nOutput State After QFT:");
+    print_quantum_state(&output_state);
+
+    // 🖼️ Save a bar plot of amplitudes
+    let _ = plot_real_imag_parts(&output_state, "real_imag_output.png");
+
+
+
+    println!("\nApplying inverse QFT to output state...");
+    let inverse = inverse_qft_matrix(&qft);
+    let recovered_state = apply_qft(&inverse, &output_state);
+
+    println!("\nRecovered (original) state:");
+    print_quantum_state(&recovered_state);
 }
